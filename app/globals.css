@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #1a3a6b;
+  --brand-light: #2563eb;
+  --brand-dark: #0f2347;
+  --accent: #3b82f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  color: #1e293b;
+  background: #f0f4ff;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+}

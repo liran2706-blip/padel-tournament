@@ -34,6 +34,20 @@ export default function HomePage() {
   const [groupTournaments, setGroupTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [proBlocked, setProBlocked] = useState(false);
+
+  useEffect(() => {
+    async function checkPro() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('pro_users').select('active').eq('user_id', user.id).maybeSingle();
+      // If pro_users record exists and active is false — blocked
+      if (data && data.active === false) setProBlocked(true);
+    }
+    checkPro();
+  }, []);
+
   const load = useCallback(async () => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -67,6 +81,20 @@ export default function HomePage() {
     await supabase.from('group_tournaments').delete().eq('id', id);
     setGroupTournaments((prev) => prev.filter(t => t.id !== id));
   }
+
+  if (proBlocked) return (
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4" dir="rtl">
+      <div className="max-w-md w-full text-center bg-white rounded-2xl p-8 shadow-lg border border-red-200">
+        <p className="text-5xl mb-4">🔒</p>
+        <h2 className="text-xl font-black text-slate-800 mb-3">הגישה חסומה</h2>
+        <p className="text-slate-500 mb-6">הטורניר שלך הסתיים. כדי להקים טורניר נוסף יש לשלם ולקבל אישור.</p>
+        <a href="https://pro.israelpadel.com/dashboard"
+          className="block w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition-colors">
+          לדשבורד שלי ←
+        </a>
+      </div>
+    </div>
+  );
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-6">

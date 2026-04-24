@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createTournament, createPlayers } from '@/lib/tournament/db';
 import { createClient } from '@/lib/supabase/client';
@@ -10,11 +10,23 @@ import Link from 'next/link';
 const PLAYER_COUNT = 20;
 
 export default function NewTournamentPage() {
+  const [proBlocked, setProBlocked] = useState(false);
   const router = useRouter();
   const [name, setName] = useState('');
   const [players, setPlayers] = useState<string[]>(Array(PLAYER_COUNT).fill(''));
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function checkPro() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('pro_users').select('active').eq('user_id', user.id).maybeSingle();
+      if (data && data.active === false) setProBlocked(true);
+    }
+    checkPro();
+  }, []);
 
   function fillDemo() {
     setName('טורניר מיקסינג פאדל');
@@ -54,6 +66,20 @@ export default function NewTournamentPage() {
       setLoading(false);
     }
   }
+
+  if (proBlocked) return (
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4" dir="rtl">
+      <div className="max-w-md w-full text-center bg-white rounded-2xl p-8 shadow-lg border border-red-200">
+        <p className="text-5xl mb-4">🔒</p>
+        <h2 className="text-xl font-black text-slate-800 mb-3">הגישה חסומה</h2>
+        <p className="text-slate-500 mb-6">הטורניר שלך הסתיים. כדי להקים טורניר נוסף יש לשלם ולקבל אישור.</p>
+        <a href="https://pro.israelpadel.com/dashboard"
+          className="block w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition-colors">
+          לדשבורד שלי ←
+        </a>
+      </div>
+    </div>
+  );
 
   return (
     <main className="max-w-lg mx-auto px-4 py-8">

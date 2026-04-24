@@ -97,7 +97,7 @@ export default async function TournamentDashboardPage({ params }: { params: { id
         </div>
       )}
 
-      {isCurrentRoundComplete && currentRound.round_number >= (tournament as any).total_rounds && tournament.status !== 'completed' && (
+      {isCurrentRoundComplete && currentRound.round_number >= (tournament as any).total_rounds && (tournament.status as string) !== 'completed' && (
         <AddRoundButton tournamentId={params.id} currentTotal={(tournament as any).total_rounds} />
       )}
 

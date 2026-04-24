@@ -142,7 +142,7 @@ export default function GroupTournamentPage() {
 
     // Check if tournament is complete (final1 done)
     const { data: updatedMatches } = await supabase.from('group_matches').select('*').eq('tournament_id', id);
-    const f1 = updatedMatches?.find(m => m.stage === 'final' && m.status === 'completed');
+    const f1 = updatedMatches?.find((m: Match) => m.stage === 'final' && m.status === 'completed');
     if (f1) {
       await supabase.from('group_tournaments').update({ status: 'completed' }).eq('id', id);
     }

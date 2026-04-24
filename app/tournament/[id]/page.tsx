@@ -3,7 +3,7 @@ import {
   fetchTournament, fetchPlayers, fetchCurrentRound,
   fetchRoundWithDetails, fetchRounds,
 } from '@/lib/tournament/db';
-import { sortByStandings, DEFAULT_TOTAL_ROUNDS, getFinalRound } from '@/lib/tournament/scheduling';
+import { sortByStandings, DEFAULT_TOTAL_ROUNDS, getFinalRound, TOTAL_ROUNDS } from '@/lib/tournament/scheduling';
 import TournamentHeader from '@/components/TournamentHeader';
 import RestingPlayersCard from '@/components/RestingPlayersCard';
 import CourtMatchCard from '@/components/CourtMatchCard';

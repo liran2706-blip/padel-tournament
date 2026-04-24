@@ -140,6 +140,13 @@ export default function GroupTournamentPage() {
       { tournament_id: id, stage: 'final2', team_a_id: getWinner(semiMatches[2]), team_b_id: getWinner(semiMatches[3]), match_order: 201 },
     ]);
 
+    // Check if tournament is complete (final1 done)
+    const { data: updatedMatches } = await supabase.from('group_matches').select('*').eq('tournament_id', id);
+    const f1 = updatedMatches?.find(m => m.stage === 'final' && m.status === 'completed');
+    if (f1) {
+      await supabase.from('group_tournaments').update({ status: 'completed' }).eq('id', id);
+    }
+
     load();
   }
 
@@ -162,6 +169,18 @@ export default function GroupTournamentPage() {
           <p className="text-xs text-purple-400">טורניר בתים</p>
         </div>
         <div className="w-16" />
+      </div>
+
+      {/* Display link */}
+      <div className="mb-4">
+        <a
+          href={`/group/${id}/display`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors"
+        >
+          📺 פתח מסך צפייה לשחקנים
+        </a>
       </div>
 
       {tournament.status === 'setup' && (

@@ -10,7 +10,7 @@ export default function TournamentHeader({ tournament, totalRounds }: Props) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <Link href="/" className="text-blue-400 hover:text-blue-600 text-xl">←</Link>
+        <Link href="/" className="flex items-center gap-1 text-blue-400 hover:text-blue-600 text-sm font-medium bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-colors">🏠 בית</Link>
         <div>
           <h1 className="text-xl font-bold text-blue-900">{tournament.name}</h1>
           <p className="text-sm text-blue-400">

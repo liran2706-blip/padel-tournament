@@ -92,8 +92,8 @@ export default function GroupTournamentPage() {
 
     const winner = scoreA > scoreB ? match.team_a_id : match.team_b_id;
     const loser = scoreA > scoreB ? match.team_b_id : match.team_a_id;
-    const wt = ft.find(t => t.id === winner)!;
-    const lt = ft.find(t => t.id === loser)!;
+    const wt = ft.find((t: Team) => t.id === winner)!;
+    const lt = ft.find((t: Team) => t.id === loser)!;
 
     await supabase.from('group_teams').update({ points: wt.points + 3, wins: wt.wins + 1, games_won: wt.games_won + Math.max(scoreA, scoreB), games_lost: wt.games_lost + Math.min(scoreA, scoreB) }).eq('id', winner);
     await supabase.from('group_teams').update({ losses: lt.losses + 1, games_won: lt.games_won + Math.min(scoreA, scoreB), games_lost: lt.games_lost + Math.max(scoreA, scoreB) }).eq('id', loser);

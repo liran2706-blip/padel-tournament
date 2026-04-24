@@ -3,13 +3,14 @@ import {
   fetchTournament, fetchPlayers, fetchCurrentRound,
   fetchRoundWithDetails, fetchRounds,
 } from '@/lib/tournament/db';
-import { sortByStandings, TOTAL_ROUNDS, FINAL_ROUND } from '@/lib/tournament/scheduling';
+import { sortByStandings, DEFAULT_TOTAL_ROUNDS, getFinalRound } from '@/lib/tournament/scheduling';
 import TournamentHeader from '@/components/TournamentHeader';
 import RestingPlayersCard from '@/components/RestingPlayersCard';
 import CourtMatchCard from '@/components/CourtMatchCard';
 import StandingsTable from '@/components/StandingsTable';
 import RoundHistory from '@/components/RoundHistory';
 import ResultsEntryForm from '@/components/ResultsEntryForm';
+import AddRoundButton from './AddRoundButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +69,7 @@ export default async function TournamentDashboardPage({ params }: { params: { id
       <div>
         <h2 className="text-sm font-semibold text-blue-400 uppercase tracking-wide mb-3">
           מגרשים — סיבוב {currentRound.round_number}
-          {currentRound.round_number === FINAL_ROUND && (
+          {currentRound.round_number === getFinalRound((tournament as any).total_rounds ?? DEFAULT_TOTAL_ROUNDS) && (
             <span className="mr-2 text-yellow-600 normal-case">🏆 סיבוב גמר</span>
           )}
 
@@ -89,11 +90,15 @@ export default async function TournamentDashboardPage({ params }: { params: { id
         />
       )}
 
-      {isCurrentRoundComplete && currentRound.round_number < TOTAL_ROUNDS && (
+      {isCurrentRoundComplete && currentRound.round_number < (tournament as any).total_rounds && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
           <p className="text-blue-700 font-semibold">סיבוב {currentRound.round_number} הושלם ✓</p>
           <p className="text-blue-500 text-sm mt-1">סיבוב {currentRound.round_number + 1} נוצר אוטומטית</p>
         </div>
+      )}
+
+      {isCurrentRoundComplete && currentRound.round_number >= (tournament as any).total_rounds && tournament.status !== 'completed' && (
+        <AddRoundButton tournamentId={params.id} currentTotal={(tournament as any).total_rounds} />
       )}
 
       <div>

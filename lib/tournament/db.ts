@@ -21,9 +21,9 @@ import {
   generateNextRoundCourts,
   generateBonusRoundCourt,
   calculateMatchDeltas,
-  TOTAL_ROUNDS,
-  FINAL_ROUND,
-  BONUS_ROUND,
+  DEFAULT_TOTAL_ROUNDS,
+  getFinalRound,
+  getBonusRound,
   CourtAssignment,
 } from '@/lib/tournament/scheduling';
 
@@ -52,10 +52,10 @@ export async function fetchTournament(id: string): Promise<Tournament> {
   return data as Tournament;
 }
 
-export async function createTournament(name: string, userId?: string): Promise<Tournament> {
+export async function createTournament(name: string, userId?: string, totalRounds: number = DEFAULT_TOTAL_ROUNDS): Promise<Tournament> {
   const { data, error } = await getSupabase()
     .from('tournaments')
-    .insert({ name, status: 'setup', current_round_number: 0, user_id: userId })
+    .insert({ name, status: 'setup', current_round_number: 0, user_id: userId, total_rounds: totalRounds })
     .select()
     .single();
   if (error) throw error;
@@ -380,9 +380,17 @@ export async function submitRoundResults(
     .update({ status: 'completed' })
     .eq('id', roundId);
 
+  // Fetch tournament to get total_rounds
+  const { data: tournamentData } = await getSupabase()
+    .from('tournaments')
+    .select('total_rounds')
+    .eq('id', tournamentId)
+    .maybeSingle();
+  const totalRounds = tournamentData?.total_rounds ?? DEFAULT_TOTAL_ROUNDS;
+
   // If not last round, generate next
-  if (roundNumber < TOTAL_ROUNDS) {
-    await generateAndSaveNextRound(tournamentId, roundNumber + 1);
+  if (roundNumber < totalRounds) {
+    await generateAndSaveNextRound(tournamentId, roundNumber + 1, totalRounds);
   } else {
     // Tournament complete
     await getSupabase()
@@ -394,7 +402,8 @@ export async function submitRoundResults(
 
 async function generateAndSaveNextRound(
   tournamentId: string,
-  nextRoundNumber: number
+  nextRoundNumber: number,
+  totalRounds: number = DEFAULT_TOTAL_ROUNDS
 ): Promise<void> {
   // Guard against duplicate rounds
   const { data: existingRound } = await getSupabase()
@@ -422,7 +431,8 @@ async function generateAndSaveNextRound(
   const restingPlayers = getRestingPlayersForRound(
     allPlayers,
     nextRoundNumber,
-    alreadyRestedIds
+    alreadyRestedIds,
+    totalRounds
   );
   const restingIds = new Set(restingPlayers.map((p) => p.id));
   const activePlayers = allPlayers.filter((p) => !restingIds.has(p.id));
@@ -455,13 +465,14 @@ async function generateAndSaveNextRound(
   // Fetch relationship history for repeat minimization
   const history = await fetchRelationshipHistory(tournamentId);
 
-  // Round 7 (bonus): single court for 4 players who rested in round 6
-  // Round 6 (final): ranked pairing
-  // Rounds 1-5: random
+  // Dynamic round logic
+  const finalRound = getFinalRound(totalRounds);
+  const bonusRound = getBonusRound(totalRounds);
+
   let courts: CourtAssignment[];
-  if (nextRoundNumber === BONUS_ROUND) {
+  if (nextRoundNumber === bonusRound) {
     courts = generateBonusRoundCourt(activePlayers);
-  } else if (nextRoundNumber === FINAL_ROUND) {
+  } else if (nextRoundNumber === finalRound) {
     courts = generateNextRoundCourts(activePlayers, history);
   } else {
     courts = generateFirstRoundCourts(activePlayers);

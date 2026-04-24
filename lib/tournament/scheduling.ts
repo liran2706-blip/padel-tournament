@@ -1,8 +1,14 @@
 import { Player, Match, PlayerRelationshipHistory, ScoreEntry } from '@/types';
 
-export const TOTAL_ROUNDS = 7;
-export const FINAL_ROUND = 6;       // ranked pairing round
-export const BONUS_ROUND = 7;       // single court bonus round
+export const DEFAULT_TOTAL_ROUNDS = 7;
+// Dynamic rounds - computed from tournament settings
+export function getFinalRound(totalRounds: number) { return totalRounds - 1; }
+export function getBonusRound(totalRounds: number) { return totalRounds; }
+
+// Keep for backward compat
+export const TOTAL_ROUNDS = DEFAULT_TOTAL_ROUNDS;
+export const FINAL_ROUND = 6;
+export const BONUS_ROUND = 7;
 export const TOTAL_COURTS = 4;
 export const TOTAL_PLAYERS = 20;
 export const PLAYERS_PER_ROUND = 16;
@@ -40,28 +46,30 @@ export function sortByStandings(players: Player[]): Player[] {
 export function getRestingPlayersForRound(
   allPlayers: Player[],
   roundNumber: number,
-  alreadyRestedPlayerIds: Set<string>
+  alreadyRestedPlayerIds: Set<string>,
+  totalRounds: number = DEFAULT_TOTAL_ROUNDS
 ): Player[] {
+  const finalRound = getFinalRound(totalRounds);
+  const bonusRound = getBonusRound(totalRounds);
+
   if (roundNumber === 1) {
     const shuffled = shufflePlayers(allPlayers);
     return shuffled.slice(0, RESTING_PER_ROUND);
   }
 
-  // Round 6 (final round): bottom 4 in standings rest
-  if (roundNumber === FINAL_ROUND) {
+  // Final round: bottom 4 in standings rest
+  if (roundNumber === finalRound) {
     const sorted = sortByStandings(allPlayers);
     return sorted.slice(allPlayers.length - RESTING_PER_ROUND);
   }
 
-  // Round 7 (bonus round): everyone rests except the 4 who rested in round 6
-  if (roundNumber === BONUS_ROUND) {
+  // Bonus round: everyone rests except the 4 who rested in final round
+  if (roundNumber === bonusRound) {
     const sorted = sortByStandings(allPlayers);
-    // The 4 who rested in round 6 are the bottom 4 — they play now
-    // Everyone else "rests" (16 players)
     return sorted.slice(0, allPlayers.length - RESTING_PER_ROUND);
   }
 
-  // Rounds 2-5: players who haven't rested yet
+  // Regular rounds: players who haven't rested yet
   const notYetRested = allPlayers.filter((p) => !alreadyRestedPlayerIds.has(p.id));
   const sorted = sortByStandings(notYetRested).reverse();
   return sorted.slice(0, RESTING_PER_ROUND);

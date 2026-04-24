@@ -1,14 +1,11 @@
 import { Player, Match, PlayerRelationshipHistory, ScoreEntry } from '@/types';
 
-export const DEFAULT_TOTAL_ROUNDS = 7;
-// Dynamic rounds - computed from tournament settings
-export function getFinalRound(totalRounds: number) { return totalRounds - 1; }
-export function getBonusRound(totalRounds: number) { return totalRounds; }
-
-// Keep for backward compat
-export const TOTAL_ROUNDS = DEFAULT_TOTAL_ROUNDS;
+export const TOTAL_ROUNDS = 7;
 export const FINAL_ROUND = 6;
 export const BONUS_ROUND = 7;
+export const DEFAULT_TOTAL_ROUNDS = TOTAL_ROUNDS;
+export function getFinalRound(totalRounds: number) { return totalRounds - 1; }
+export function getBonusRound(totalRounds: number) { return totalRounds; }
 export const TOTAL_COURTS = 4;
 export const TOTAL_PLAYERS = 20;
 export const PLAYERS_PER_ROUND = 16;
@@ -71,6 +68,21 @@ export function getRestingPlayersForRound(
 
   // Regular rounds: players who haven't rested yet
   const notYetRested = allPlayers.filter((p) => !alreadyRestedPlayerIds.has(p.id));
+
+  // If everyone has rested already (extended tournament)
+  // Pick 4 who rested least recently — use rest_round_number to track
+  if (notYetRested.length < RESTING_PER_ROUND) {
+    // Sort by rest_round_number ascending (rested earliest = should rest next)
+    const sorted = [...allPlayers].sort((a, b) => {
+      const aRound = a.rest_round_number ?? 0;
+      const bRound = b.rest_round_number ?? 0;
+      if (aRound !== bRound) return aRound - bRound;
+      // tie-break: lower standings rests first
+      return b.total_points - a.total_points;
+    });
+    return sorted.slice(0, RESTING_PER_ROUND);
+  }
+
   const sorted = sortByStandings(notYetRested).reverse();
   return sorted.slice(0, RESTING_PER_ROUND);
 }

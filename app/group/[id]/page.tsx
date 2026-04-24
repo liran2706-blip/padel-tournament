@@ -113,12 +113,12 @@ export default function GroupTournamentPage() {
     const [c1, c2] = getTop2('C');
     const [d1, d2] = getTop2('D');
 
-    // Semi finals: 1A vs 1C, 1B vs 1D, 2A vs 2C, 2B vs 2D
+    // Semi finals: 1A vs 2C, 1B vs 2D, 1C vs 2A, 1D vs 2B
     await supabase.from('group_matches').insert([
-      { tournament_id: id, stage: 'semi', team_a_id: a1.id, team_b_id: c1.id, match_order: 100 },
-      { tournament_id: id, stage: 'semi', team_a_id: b1.id, team_b_id: d1.id, match_order: 101 },
-      { tournament_id: id, stage: 'semi', team_a_id: a2.id, team_b_id: c2.id, match_order: 102 },
-      { tournament_id: id, stage: 'semi', team_a_id: b2.id, team_b_id: d2.id, match_order: 103 },
+      { tournament_id: id, stage: 'semi', team_a_id: a1.id, team_b_id: c2.id, match_order: 100 },
+      { tournament_id: id, stage: 'semi', team_a_id: b1.id, team_b_id: d2.id, match_order: 101 },
+      { tournament_id: id, stage: 'semi', team_a_id: c1.id, team_b_id: a2.id, match_order: 102 },
+      { tournament_id: id, stage: 'semi', team_a_id: d1.id, team_b_id: b2.id, match_order: 103 },
     ]);
 
     await supabase.from('group_tournaments').update({ status: 'knockout' }).eq('id', id);
@@ -336,16 +336,23 @@ function MatchCard({ match, teamA, teamB, onSubmit }: {
   );
 }
 
+function BracketSlot({ name, isWinner, isPending }: { name: string; isWinner?: boolean; isPending?: boolean }) {
+  return (
+    <div className={`px-3 py-2 rounded-lg text-sm font-semibold border ${
+      isWinner ? 'bg-green-100 border-green-400 text-green-800' :
+      isPending ? 'bg-slate-50 border-dashed border-slate-300 text-slate-400 italic' :
+      'bg-white border-slate-200 text-slate-700'
+    }`}>
+      {name || '—'}
+    </div>
+  );
+}
+
 function KnockoutBracket({ semiMatches, finalMatches, teamMap, onSubmit }: {
   semiMatches: Match[]; finalMatches: Match[];
   teamMap: Record<string, Team>;
   onSubmit: (id: string, a: number, b: number) => void;
 }) {
-  const getWinnerName = (m: Match) => {
-    if (m.status !== 'completed') return '?';
-    return teamMap[m.score_a! > m.score_b! ? m.team_a_id : m.team_b_id]?.name ?? '?';
-  };
-
   const semi1 = semiMatches.find(m => m.match_order === 100);
   const semi2 = semiMatches.find(m => m.match_order === 101);
   const semi3 = semiMatches.find(m => m.match_order === 102);
@@ -353,97 +360,147 @@ function KnockoutBracket({ semiMatches, finalMatches, teamMap, onSubmit }: {
   const final1 = finalMatches.find(m => m.stage === 'final');
   const final2 = finalMatches.find(m => m.stage === 'final2');
 
+  const getWinner = (m?: Match): string => {
+    if (!m || m.status !== 'completed') return '';
+    return teamMap[m.score_a! > m.score_b! ? m.team_a_id : m.team_b_id]?.name ?? '';
+  };
+  const getTeamName = (id: string) => teamMap[id]?.name ?? '?';
+
   return (
-    <div className="space-y-6">
-      {/* Semi finals */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-px flex-1 bg-purple-200" />
-          <span className="text-sm font-bold text-purple-700 px-2">חצי גמר</span>
-          <div className="h-px flex-1 bg-purple-200" />
-        </div>
+    <div className="space-y-6" dir="rtl">
 
-        {/* Track 1: places 1 */}
-        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 mb-3">
-          <p className="text-xs text-purple-500 font-semibold mb-3 text-center">מסלול אלופים (מקום 1 בכל בית)</p>
-          <div className="space-y-2">
-            {semi1 && <MatchCard match={semi1} teamA={teamMap[semi1.team_a_id]} teamB={teamMap[semi1.team_b_id]} onSubmit={onSubmit} />}
-            {semi2 && <MatchCard match={semi2} teamA={teamMap[semi2.team_a_id]} teamB={teamMap[semi2.team_b_id]} onSubmit={onSubmit} />}
-          </div>
-          {semi1?.status === 'completed' && semi2?.status === 'completed' && !final1 && (
-            <div className="mt-3 bg-white rounded-xl p-3 border border-purple-100">
-              <p className="text-xs text-purple-400 text-center mb-1">→ גמר 🥇</p>
-              <div className="flex justify-between text-sm font-bold text-slate-700">
-                <span>{getWinnerName(semi1)}</span>
-                <span className="text-purple-400">vs</span>
-                <span>{getWinnerName(semi2)}</span>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Bracket visual */}
+      <div className="bg-[#1a1a2e] rounded-2xl p-4 overflow-x-auto">
+        <p className="text-center text-xs text-slate-400 mb-4 font-semibold tracking-widest uppercase">עץ נוקאאוט</p>
 
-        {/* Track 2: places 2 */}
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-          <p className="text-xs text-blue-500 font-semibold mb-3 text-center">מסלול סגניות (מקום 2 בכל בית)</p>
-          <div className="space-y-2">
-            {semi3 && <MatchCard match={semi3} teamA={teamMap[semi3.team_a_id]} teamB={teamMap[semi3.team_b_id]} onSubmit={onSubmit} />}
-            {semi4 && <MatchCard match={semi4} teamA={teamMap[semi4.team_a_id]} teamB={teamMap[semi4.team_b_id]} onSubmit={onSubmit} />}
-          </div>
-          {semi3?.status === 'completed' && semi4?.status === 'completed' && !final2 && (
-            <div className="mt-3 bg-white rounded-xl p-3 border border-blue-100">
-              <p className="text-xs text-blue-400 text-center mb-1">→ גמר 🥈</p>
-              <div className="flex justify-between text-sm font-bold text-slate-700">
-                <span>{getWinnerName(semi3)}</span>
-                <span className="text-blue-400">vs</span>
-                <span>{getWinnerName(semi4)}</span>
+        <div className="flex items-center justify-between gap-2 min-w-[480px]">
+
+          {/* Left: semi 1+2 */}
+          <div className="flex flex-col gap-6 w-36">
+            {/* Semi 1 */}
+            <div className="space-y-1">
+              <p className="text-xs text-blue-400 font-bold mb-1">חצי גמר 1</p>
+              <BracketSlot name={semi1 ? getTeamName(semi1.team_a_id) : '?'} isWinner={semi1?.status === 'completed' && semi1.score_a! > semi1.score_b!} />
+              <div className="text-center text-xs text-slate-500">
+                {semi1?.status === 'completed' ? `${semi1.score_a} – ${semi1.score_b}` : 'vs'}
               </div>
+              <BracketSlot name={semi1 ? getTeamName(semi1.team_b_id) : '?'} isWinner={semi1?.status === 'completed' && semi1.score_b! > semi1.score_a!} />
             </div>
-          )}
+            {/* Semi 2 */}
+            <div className="space-y-1">
+              <p className="text-xs text-blue-400 font-bold mb-1">חצי גמר 2</p>
+              <BracketSlot name={semi2 ? getTeamName(semi2.team_a_id) : '?'} isWinner={semi2?.status === 'completed' && semi2.score_a! > semi2.score_b!} />
+              <div className="text-center text-xs text-slate-500">
+                {semi2?.status === 'completed' ? `${semi2.score_a} – ${semi2.score_b}` : 'vs'}
+              </div>
+              <BracketSlot name={semi2 ? getTeamName(semi2.team_b_id) : '?'} isWinner={semi2?.status === 'completed' && semi2.score_b! > semi2.score_a!} />
+            </div>
+          </div>
+
+          {/* Lines left → final1 */}
+          <div className="flex flex-col items-center gap-6 w-8">
+            <div className="w-full h-px bg-blue-600 mt-8" />
+            <div className="w-full h-px bg-blue-600 mt-8" />
+          </div>
+
+          {/* Center: finals */}
+          <div className="flex flex-col gap-4 w-36">
+            {/* Final 1 (champions) */}
+            <div className="border-2 border-yellow-400 rounded-xl overflow-hidden">
+              <div className="bg-yellow-400 text-center py-1">
+                <p className="text-xs font-black text-yellow-900">🥇 גמר</p>
+              </div>
+              <div className="bg-[#0f0f1a] p-2 space-y-1">
+                <BracketSlot name={final1 ? getTeamName(final1.team_a_id) : getWinner(semi1) || '...'} isWinner={final1?.status === 'completed' && final1.score_a! > final1.score_b!} isPending={!final1 && !getWinner(semi1)} />
+                <div className="text-center text-xs text-slate-500">
+                  {final1?.status === 'completed' ? `${final1.score_a} – ${final1.score_b}` : 'vs'}
+                </div>
+                <BracketSlot name={final1 ? getTeamName(final1.team_b_id) : getWinner(semi2) || '...'} isWinner={final1?.status === 'completed' && final1.score_b! > final1.score_a!} isPending={!final1 && !getWinner(semi2)} />
+              </div>
+              {final1?.status === 'completed' && (
+                <div className="bg-yellow-400 text-center py-1.5">
+                  <p className="text-xs font-black text-yellow-900">🏆 {getWinner(final1)}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Final 2 (3rd-4th) */}
+            <div className="border-2 border-blue-400 rounded-xl overflow-hidden">
+              <div className="bg-blue-400 text-center py-1">
+                <p className="text-xs font-black text-blue-900">🥈 גמר מקום 3-4</p>
+              </div>
+              <div className="bg-[#0f0f1a] p-2 space-y-1">
+                <BracketSlot name={final2 ? getTeamName(final2.team_a_id) : getWinner(semi3) || '...'} isWinner={final2?.status === 'completed' && final2.score_a! > final2.score_b!} isPending={!final2 && !getWinner(semi3)} />
+                <div className="text-center text-xs text-slate-500">
+                  {final2?.status === 'completed' ? `${final2.score_a} – ${final2.score_b}` : 'vs'}
+                </div>
+                <BracketSlot name={final2 ? getTeamName(final2.team_b_id) : getWinner(semi4) || '...'} isWinner={final2?.status === 'completed' && final2.score_b! > final2.score_a!} isPending={!final2 && !getWinner(semi4)} />
+              </div>
+              {final2?.status === 'completed' && (
+                <div className="bg-blue-400 text-center py-1.5">
+                  <p className="text-xs font-black text-blue-900">🥉 {getWinner(final2)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Lines right */}
+          <div className="flex flex-col items-center gap-6 w-8">
+            <div className="w-full h-px bg-purple-600 mt-8" />
+            <div className="w-full h-px bg-purple-600 mt-8" />
+          </div>
+
+          {/* Right: semi 3+4 */}
+          <div className="flex flex-col gap-6 w-36">
+            <div className="space-y-1">
+              <p className="text-xs text-purple-400 font-bold mb-1">חצי גמר 3</p>
+              <BracketSlot name={semi3 ? getTeamName(semi3.team_a_id) : '?'} isWinner={semi3?.status === 'completed' && semi3.score_a! > semi3.score_b!} />
+              <div className="text-center text-xs text-slate-500">
+                {semi3?.status === 'completed' ? `${semi3.score_a} – ${semi3.score_b}` : 'vs'}
+              </div>
+              <BracketSlot name={semi3 ? getTeamName(semi3.team_b_id) : '?'} isWinner={semi3?.status === 'completed' && semi3.score_b! > semi3.score_a!} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-purple-400 font-bold mb-1">חצי גמר 4</p>
+              <BracketSlot name={semi4 ? getTeamName(semi4.team_a_id) : '?'} isWinner={semi4?.status === 'completed' && semi4.score_a! > semi4.score_b!} />
+              <div className="text-center text-xs text-slate-500">
+                {semi4?.status === 'completed' ? `${semi4.score_a} – ${semi4.score_b}` : 'vs'}
+              </div>
+              <BracketSlot name={semi4 ? getTeamName(semi4.team_b_id) : '?'} isWinner={semi4?.status === 'completed' && semi4.score_b! > semi4.score_a!} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Finals */}
-      {finalMatches.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-px flex-1 bg-yellow-300" />
-            <span className="text-sm font-bold text-yellow-600 px-2">גמר</span>
-            <div className="h-px flex-1 bg-yellow-300" />
-          </div>
-          <div className="space-y-3">
-            {final1 && (
-              <div className="border-2 border-yellow-300 rounded-2xl overflow-hidden">
-                <div className="bg-yellow-50 px-4 py-2 text-center">
-                  <p className="text-xs font-bold text-yellow-700">🥇 גמר — מקום 1-2</p>
-                </div>
-                <div className="p-3">
-                  <MatchCard match={final1} teamA={teamMap[final1.team_a_id]} teamB={teamMap[final1.team_b_id]} onSubmit={onSubmit} />
-                </div>
-                {final1.status === 'completed' && (
-                  <div className="bg-yellow-50 px-4 py-2 text-center border-t border-yellow-200">
-                    <p className="text-sm font-black text-yellow-700">🏆 אלוף: {teamMap[final1.score_a! > final1.score_b! ? final1.team_a_id : final1.team_b_id]?.name}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            {final2 && (
-              <div className="border-2 border-blue-200 rounded-2xl overflow-hidden">
-                <div className="bg-blue-50 px-4 py-2 text-center">
-                  <p className="text-xs font-bold text-blue-600">🥈 גמר — מקום 3-4</p>
-                </div>
-                <div className="p-3">
-                  <MatchCard match={final2} teamA={teamMap[final2.team_a_id]} teamB={teamMap[final2.team_b_id]} onSubmit={onSubmit} />
-                </div>
-                {final2.status === 'completed' && (
-                  <div className="bg-blue-50 px-4 py-2 text-center border-t border-blue-100">
-                    <p className="text-sm font-black text-blue-600">🥉 מקום 3: {teamMap[final2.score_a! > final2.score_b! ? final2.team_a_id : final2.team_b_id]?.name}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      {/* Match entry cards */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-px flex-1 bg-purple-200" />
+          <span className="text-sm font-bold text-purple-700 px-2">הזנת תוצאות</span>
+          <div className="h-px flex-1 bg-purple-200" />
         </div>
-      )}
+
+        <div className="space-y-3">
+          {[semi1, semi2, semi3, semi4].filter(Boolean).map((m, i) => m && (
+            <div key={m.id}>
+              <p className="text-xs text-slate-400 mb-1 font-semibold">חצי גמר {i + 1}</p>
+              <MatchCard match={m} teamA={teamMap[m.team_a_id]} teamB={teamMap[m.team_b_id]} onSubmit={onSubmit} />
+            </div>
+          ))}
+
+          {finalMatches.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 my-3">
+                <div className="h-px flex-1 bg-yellow-300" />
+                <span className="text-xs font-bold text-yellow-600 px-2">גמר</span>
+                <div className="h-px flex-1 bg-yellow-300" />
+              </div>
+              {final1 && <MatchCard match={final1} teamA={teamMap[final1.team_a_id]} teamB={teamMap[final1.team_b_id]} onSubmit={onSubmit} />}
+              {final2 && <MatchCard match={final2} teamA={teamMap[final2.team_a_id]} teamB={teamMap[final2.team_b_id]} onSubmit={onSubmit} />}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

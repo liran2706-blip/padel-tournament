@@ -11,6 +11,7 @@ import StandingsTable from '@/components/StandingsTable';
 import RoundHistory from '@/components/RoundHistory';
 import ResultsEntryForm from '@/components/ResultsEntryForm';
 import AddRoundButton from './AddRoundButton';
+import ExtendTournamentButton from './ExtendTournamentButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,15 @@ export default async function TournamentDashboardPage({ params }: { params: { id
   return (
     <main className="max-w-lg mx-auto px-4 py-6 space-y-5">
       <TournamentHeader tournament={tournament} totalRounds={TOTAL_ROUNDS} />
+
+      {/* Extend tournament */}
+      {tournament.status === 'in_progress' && (
+        <ExtendTournamentButton
+          tournamentId={params.id}
+          currentTotal={(tournament as any).total_rounds ?? TOTAL_ROUNDS}
+          currentRound={tournament.current_round_number}
+        />
+      )}
 
       {/* Display link */}
       <a

@@ -15,7 +15,6 @@ export default function NewTournamentPage() {
   const [players, setPlayers] = useState<string[]>(Array(PLAYER_COUNT).fill(''));
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [totalRounds, setTotalRounds] = useState(7);
 
   function fillDemo() {
     setName('טורניר מיקסינג פאדל');
@@ -46,7 +45,7 @@ export default function NewTournamentPage() {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      const tournament = await createTournament(name.trim(), user?.id, totalRounds);
+      const tournament = await createTournament(name.trim(), user?.id);
       await createPlayers(tournament.id, players.map((p) => p.trim()));
       router.push(`/tournament/${tournament.id}/setup`);
     } catch (err) {
@@ -72,29 +71,6 @@ export default function NewTournamentPage() {
           placeholder="שם הטורניר..."
           className="w-full border border-blue-200 rounded-lg px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-400 text-right"
         />
-      </div>
-
-      <div className="bg-white border border-blue-100 rounded-xl p-4 mb-4">
-        <label className="block text-sm font-semibold text-blue-800 mb-2">מספר סיבובים</label>
-        <div className="flex gap-2">
-          {[5, 6, 7, 8, 9, 10].map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setTotalRounds(n)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors border ${
-                totalRounds === n
-                  ? 'bg-blue-700 text-white border-blue-700'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-slate-400 mt-2">
-          סיבוב {totalRounds - 1} — גמר לפי דירוג · סיבוב {totalRounds} — השלמה
-        </p>
       </div>
 
       <button

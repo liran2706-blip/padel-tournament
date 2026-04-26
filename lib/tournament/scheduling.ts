@@ -1,8 +1,8 @@
 import { Player, Match, PlayerRelationshipHistory, ScoreEntry } from '@/types';
 
-export const TOTAL_ROUNDS = 6;
-export const FINAL_ROUND = 5;
-export const BONUS_ROUND = 6;
+export const TOTAL_ROUNDS = 7;
+export const FINAL_ROUND = 6;
+export const BONUS_ROUND = 7;
 export const DEFAULT_TOTAL_ROUNDS = TOTAL_ROUNDS;
 export function getFinalRound(totalRounds: number) { return totalRounds - 1; }
 export function getBonusRound(totalRounds: number) { return totalRounds; }

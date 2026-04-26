@@ -33,7 +33,6 @@ export default function HomePage() {
   const [mixTournaments, setMixTournaments] = useState<Tournament[]>([]);
   const [groupTournaments, setGroupTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [proBlocked, setProBlocked] = useState(false);
 
   useEffect(() => {
@@ -42,7 +41,6 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from('pro_users').select('active').eq('user_id', user.id).maybeSingle();
-      // If pro_users record exists and active is false — blocked
       if (data && data.active === false) setProBlocked(true);
     }
     checkPro();
@@ -82,6 +80,43 @@ export default function HomePage() {
     setGroupTournaments((prev) => prev.filter(t => t.id !== id));
   }
 
+  async function handleResetResults(id: string) {
+    if (!confirm('האם למחוק את כל התוצאות של הטורניר?\n\nפעולה זו תאפס את כל הניקוד, הנצחונות וההפסדים של השחקנים ותמחק את כל הסיבובים.')) return;
+    const supabase = createClient();
+
+    // מחיקת כל הסיבובים והמשחקים
+    const { data: rounds } = await supabase.from('rounds').select('id').eq('tournament_id', id);
+    if (rounds && rounds.length > 0) {
+      const roundIds = rounds.map((r: any) => r.id);
+      await supabase.from('round_rests').delete().in('round_id', roundIds);
+      await supabase.from('matches').delete().in('round_id', roundIds);
+      await supabase.from('rounds').delete().eq('tournament_id', id);
+    }
+
+    // איפוס נקודות שחקנים
+    await supabase.from('players').update({
+      total_points: 0,
+      total_diff: 0,
+      wins: 0,
+      losses: 0,
+      games_played: 0,
+      rest_count: 0,
+      rest_round_number: null,
+    }).eq('tournament_id', id);
+
+    // איפוס היסטוריית קשרים
+    await supabase.from('player_relationship_history').delete().eq('tournament_id', id);
+
+    // איפוס סטטוס הטורניר
+    await supabase.from('tournaments').update({
+      status: 'setup',
+      current_round_number: 0,
+    }).eq('id', id);
+
+    setMixTournaments((prev) => prev.map(t => t.id === id ? { ...t, status: 'setup' } : t));
+    alert('התוצאות אופסו בהצלחה ✓');
+  }
+
   if (proBlocked) return (
     <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4" dir="rtl">
       <div className="max-w-md w-full text-center bg-white rounded-2xl p-8 shadow-lg border border-red-200">
@@ -107,7 +142,6 @@ export default function HomePage() {
         <Image src="/padel.png" alt="Padel" width={800} height={300} className="w-full object-cover max-h-40" priority />
       </div>
 
-      {/* Two columns */}
       <div className="grid grid-cols-2 gap-4">
 
         {/* Mixing column */}
@@ -142,8 +176,18 @@ export default function HomePage() {
                       </span>
                     </div>
                   </Link>
-                  <button onClick={() => handleDeleteMix(t.id)}
-                    className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors">
+                  <button
+                    onClick={() => handleResetResults(t.id)}
+                    className="text-orange-400 hover:text-orange-600 p-2 rounded-lg hover:bg-orange-50 transition-colors"
+                    title="איפוס תוצאות"
+                  >
+                    🔄
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMix(t.id)}
+                    className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                    title="מחק טורניר"
+                  >
                     🗑
                   </button>
                 </li>

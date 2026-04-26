@@ -63,7 +63,7 @@ export default async function TournamentDashboardPage({ params }: { params: { id
 
   return (
     <main className="max-w-lg mx-auto px-4 py-6 space-y-5">
-      <TournamentHeader tournament={tournament} totalRounds={TOTAL_ROUNDS} />
+      <TournamentHeader tournament={tournament} totalRounds={totalRounds} />
 
       {/* Display link */}
       <a

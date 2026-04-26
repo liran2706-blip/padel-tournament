@@ -16,6 +16,7 @@ export default async function TournamentSetupPage({
   }
 
   const players = await fetchPlayers(params.id);
+  const totalRounds = (tournament as any).total_rounds ?? 7;
 
   return (
     <main className="max-w-lg mx-auto px-4 py-8">
@@ -26,7 +27,7 @@ export default async function TournamentSetupPage({
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
         <p className="text-blue-800 font-semibold mb-1">הטורניר מוכן להתחלה</p>
-        <p className="text-blue-600 text-sm">{players.length} שחקנים · 4 מגרשים · 6 סיבובים</p>
+        <p className="text-blue-600 text-sm">{players.length} שחקנים · 4 מגרשים · {totalRounds} סיבובים</p>
       </div>
 
       <div className="bg-white border border-blue-100 rounded-xl p-4 mb-6">

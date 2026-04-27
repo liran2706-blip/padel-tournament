@@ -135,7 +135,7 @@ export default function DisplayClient({ tournament, sortedPlayers, roundDetails,
                   const bWon = hasResult && match.score_b! > match.score_a!;
 
                   return (
-                    <div key={match.id} className="bg-[#0f2347] border border-blue-900 rounded-2xl p-5 flex flex-col justify-between">
+                    <div key={match.id} className="bg-[#0f2347] border border-blue-900 rounded-2xl p-5 flex flex-col justify-center gap-4">
                       <div className="flex items-center justify-between mb-4">
                         <span className="text-xs font-bold text-blue-500 uppercase tracking-widest">מגרש {match.court_number}</span>
                         {hasResult && (

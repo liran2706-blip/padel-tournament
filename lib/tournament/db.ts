@@ -106,7 +106,7 @@ async function batchUpdatePlayerStats(
 ): Promise<void> {
   if (deltas.length === 0) return;
 
-  const playerIds = [...new Set(deltas.map((d) => d.playerId))];
+  const playerIds = Array.from(new Set(deltas.map((d) => d.playerId)));
 
   // Single fetch for all players
   const { data: currentPlayers, error: fetchErr } = await getSupabase()

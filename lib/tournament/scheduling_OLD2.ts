@@ -146,7 +146,7 @@ function scoreCourts(
       opponentCount
     );
     // Partner repeats penalized more heavily than opponent repeats
-    total += ps * 3 + os * 2;
+    total += ps * 3 + os;
   }
   return total;
 }
@@ -179,7 +179,7 @@ function bestPairingForGroup(
       [pairing.teamB[0].id, pairing.teamB[1].id],
       opponentCount
     );
-    const total = partnerScore * 3 + opponentScore * 2;
+    const total = partnerScore * 3 + opponentScore;
     if (total < bestScore) {
       bestScore = total;
       best = pairing;
@@ -249,24 +249,23 @@ export function generateFirstRoundCourts(
 
 /**
  * Generate courts for the final round based on standings.
- * Always uses fixed pairing: rank1+rank4 vs rank2+rank3.
- * No history consideration — standings determine pairings.
+ * Also uses history to minimize repeats within the ranking constraint.
  */
 export function generateNextRoundCourts(
   activePlayers: Player[],
   history: PlayerRelationshipHistory[]
 ): CourtAssignment[] {
   const sorted = sortByStandings(activePlayers);
+  const { partnerCount, opponentCount } = buildRelationshipMaps(history);
   const courts: CourtAssignment[] = [];
 
   for (let i = 0; i < TOTAL_COURTS; i++) {
     const group = sorted.slice(i * 4, i * 4 + 4);
-    const [p0, p1, p2, p3] = group;
-    // קבוע: #1+#4 נגד #2+#3
+    const pairing = bestPairingForGroup(group, partnerCount, opponentCount);
     courts.push({
       courtNumber: i + 1,
-      teamA: [p0, p3],
-      teamB: [p1, p2],
+      teamA: pairing.teamA,
+      teamB: pairing.teamB,
     });
   }
 

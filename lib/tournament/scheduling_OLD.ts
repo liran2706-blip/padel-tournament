@@ -36,6 +36,9 @@ export function sortByStandings(players: Player[]): Player[] {
 
 /**
  * Determine which players rest each round.
+ * Guarantees each player rests exactly once across 5 rounds.
+ * For round 1: random. For subsequent rounds: pick players who haven't rested yet,
+ * preferring those ranked lowest in standings.
  */
 export function getRestingPlayersForRound(
   allPlayers: Player[],
@@ -51,23 +54,30 @@ export function getRestingPlayersForRound(
     return shuffled.slice(0, RESTING_PER_ROUND);
   }
 
+  // Final round: bottom 4 in standings rest
   if (roundNumber === finalRound) {
     const sorted = sortByStandings(allPlayers);
     return sorted.slice(allPlayers.length - RESTING_PER_ROUND);
   }
 
+  // Bonus round: everyone rests except the 4 who rested in final round
   if (roundNumber === bonusRound) {
     const sorted = sortByStandings(allPlayers);
     return sorted.slice(0, allPlayers.length - RESTING_PER_ROUND);
   }
 
+  // Regular rounds: players who haven't rested yet
   const notYetRested = allPlayers.filter((p) => !alreadyRestedPlayerIds.has(p.id));
 
+  // If everyone has rested already (extended tournament)
+  // Pick 4 who rested least recently — use rest_round_number to track
   if (notYetRested.length < RESTING_PER_ROUND) {
+    // Sort by rest_round_number ascending (rested earliest = should rest next)
     const sorted = [...allPlayers].sort((a, b) => {
       const aRound = a.rest_round_number ?? 0;
       const bRound = b.rest_round_number ?? 0;
       if (aRound !== bRound) return aRound - bRound;
+      // tie-break: lower standings rests first
       return b.total_points - a.total_points;
     });
     return sorted.slice(0, RESTING_PER_ROUND);
@@ -104,6 +114,9 @@ export function buildRelationshipMaps(
   return { partnerCount, opponentCount };
 }
 
+/**
+ * Count repeated partners for a given pairing
+ */
 function getPartnerRepeatScore(
   a: string,
   b: string,
@@ -112,6 +125,9 @@ function getPartnerRepeatScore(
   return (partnerCount.get(a)?.get(b) || 0) + (partnerCount.get(b)?.get(a) || 0);
 }
 
+/**
+ * Count repeated opponents between two teams
+ */
 function getOpponentRepeatScore(
   teamA: [string, string],
   teamB: [string, string],
@@ -127,32 +143,9 @@ function getOpponentRepeatScore(
 }
 
 /**
- * Score a full court assignment (4 courts)
- */
-function scoreCourts(
-  groups: Player[][],
-  pairings: Array<{ teamA: [Player, Player]; teamB: [Player, Player] }>,
-  partnerCount: Map<string, Map<string, number>>,
-  opponentCount: Map<string, Map<string, number>>
-): number {
-  let total = 0;
-  for (const pairing of pairings) {
-    const ps =
-      getPartnerRepeatScore(pairing.teamA[0].id, pairing.teamA[1].id, partnerCount) +
-      getPartnerRepeatScore(pairing.teamB[0].id, pairing.teamB[1].id, partnerCount);
-    const os = getOpponentRepeatScore(
-      [pairing.teamA[0].id, pairing.teamA[1].id],
-      [pairing.teamB[0].id, pairing.teamB[1].id],
-      opponentCount
-    );
-    // Partner repeats penalized more heavily than opponent repeats
-    total += ps * 3 + os;
-  }
-  return total;
-}
-
-/**
- * Best pairing for a group of 4, minimizing repeats
+ * For a group of 4 players (sorted by rank), attempt to minimize repeat partners.
+ * Default pairing: [0,3] vs [1,2].
+ * Try swap [0,2] vs [1,3] and [0,1] vs [2,3] and pick the one with fewest repeats.
  */
 function bestPairingForGroup(
   group: Player[],
@@ -179,7 +172,7 @@ function bestPairingForGroup(
       [pairing.teamB[0].id, pairing.teamB[1].id],
       opponentCount
     );
-    const total = partnerScore * 3 + opponentScore;
+    const total = partnerScore * 2 + opponentScore;
     if (total < bestScore) {
       bestScore = total;
       best = pairing;
@@ -196,76 +189,43 @@ export interface CourtAssignment {
 }
 
 /**
- * Generate courts using history to minimize partner/opponent repeats.
- * Tries multiple random shuffles and picks the best assignment.
- * Used for rounds 1-5.
+ * Generate round 1 courts: purely random
  */
-export function generateFirstRoundCourts(
-  activePlayers: Player[],
-  history: PlayerRelationshipHistory[] = []
-): CourtAssignment[] {
-  const { partnerCount, opponentCount } = buildRelationshipMaps(history);
+export function generateFirstRoundCourts(activePlayers: Player[]): CourtAssignment[] {
+  const shuffled = shufflePlayers(activePlayers);
+  const courts: CourtAssignment[] = [];
 
-  const ATTEMPTS = history.length === 0 ? 1 : 300;
-  let bestCourts: CourtAssignment[] | null = null;
-  let bestScore = Infinity;
-
-  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const shuffled = shufflePlayers(activePlayers);
-    const courts: CourtAssignment[] = [];
-    let score = 0;
-
-    for (let i = 0; i < TOTAL_COURTS; i++) {
-      const group = shuffled.slice(i * 4, i * 4 + 4);
-      const pairing = bestPairingForGroup(group, partnerCount, opponentCount);
-
-      const ps =
-        getPartnerRepeatScore(pairing.teamA[0].id, pairing.teamA[1].id, partnerCount) +
-        getPartnerRepeatScore(pairing.teamB[0].id, pairing.teamB[1].id, partnerCount);
-      const os = getOpponentRepeatScore(
-        [pairing.teamA[0].id, pairing.teamA[1].id],
-        [pairing.teamB[0].id, pairing.teamB[1].id],
-        opponentCount
-      );
-      score += ps * 3 + os;
-
-      courts.push({
-        courtNumber: i + 1,
-        teamA: pairing.teamA,
-        teamB: pairing.teamB,
-      });
-    }
-
-    if (score < bestScore) {
-      bestScore = score;
-      bestCourts = courts;
-      // If perfect score (no repeats), stop early
-      if (bestScore === 0) break;
-    }
+  for (let i = 0; i < TOTAL_COURTS; i++) {
+    const group = shuffled.slice(i * 4, i * 4 + 4);
+    const [p0, p1, p2, p3] = group;
+    courts.push({
+      courtNumber: i + 1,
+      teamA: [p0, p1],
+      teamB: [p2, p3],
+    });
   }
 
-  return bestCourts!;
+  return courts;
 }
 
 /**
  * Generate courts for the final round based on standings.
- * Also uses history to minimize repeats within the ranking constraint.
+ * Always uses fixed pairing: rank1+rank4 vs rank2+rank3.
  */
 export function generateNextRoundCourts(
   activePlayers: Player[],
   history: PlayerRelationshipHistory[]
 ): CourtAssignment[] {
   const sorted = sortByStandings(activePlayers);
-  const { partnerCount, opponentCount } = buildRelationshipMaps(history);
   const courts: CourtAssignment[] = [];
 
   for (let i = 0; i < TOTAL_COURTS; i++) {
     const group = sorted.slice(i * 4, i * 4 + 4);
-    const pairing = bestPairingForGroup(group, partnerCount, opponentCount);
+    const [p0, p1, p2, p3] = group;
     courts.push({
       courtNumber: i + 1,
-      teamA: pairing.teamA,
-      teamB: pairing.teamB,
+      teamA: [p0, p3],
+      teamB: [p1, p2],
     });
   }
 
@@ -274,6 +234,7 @@ export function generateNextRoundCourts(
 
 /**
  * Generate bonus round (round 7): single court for the 4 players who rested in round 6
+ * Pairing: rank1+rank4 vs rank2+rank3
  */
 export function generateBonusRoundCourt(activePlayers: Player[]): CourtAssignment[] {
   const sorted = sortByStandings(activePlayers);
@@ -331,6 +292,9 @@ export function calculateMatchDeltas(
   return deltas;
 }
 
+/**
+ * Validate a score entry
+ */
 export function validateScore(score_a: number, score_b: number): string | null {
   if (isNaN(score_a) || isNaN(score_b)) return 'יש להזין ציון מספרי';
   if (score_a < 0 || score_b < 0) return 'הציון אינו יכול להיות שלילי';
@@ -339,9 +303,24 @@ export function validateScore(score_a: number, score_b: number): string | null {
 }
 
 export const DEMO_PLAYERS = [
-  'אלכס כהן', 'מיכאל לוי', 'דוד פרידמן', 'יוסי גולדברג',
-  'עמית שפירו', 'נועם אברהם', 'ליאור בן דוד', 'ארז חדד',
-  'גיל מנחם', 'תומר זכריה', 'ניר אלמוג', 'אורי פלד',
-  'שי קפלן', 'רון בירנבוים', 'עידן ויסמן', 'יאיר שלום',
-  'אייל מזרחי', 'בן ציון', 'אסף נחום', 'דור שמש',
+  'אלכס כהן',
+  'מיכאל לוי',
+  'דוד פרידמן',
+  'יוסי גולדברג',
+  'עמית שפירו',
+  'נועם אברהם',
+  'ליאור בן דוד',
+  'ארז חדד',
+  'גיל מנחם',
+  'תומר זכריה',
+  'ניר אלמוג',
+  'אורי פלד',
+  'שי קפלן',
+  'רון בירנבוים',
+  'עידן ויסמן',
+  'יאיר שלום',
+  'אייל מזרחי',
+  'בן ציון',
+  'אסף נחום',
+  'דור שמש',
 ];

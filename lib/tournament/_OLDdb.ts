@@ -107,6 +107,7 @@ export async function updatePlayerStats(
     games_played: number;
   }
 ): Promise<void> {
+  // fetch current
   const { data: current, error: fetchErr } = await getSupabase()
     .from('players')
     .select('total_points,total_diff,wins,losses,games_played')
@@ -226,6 +227,7 @@ async function insertRelationships(
     const [a1, a2] = court.teamA;
     const [b1, b2] = court.teamB;
 
+    // partners
     rows.push(
       { tournament_id: tournamentId, player_id: a1.id, related_player_id: a2.id, relation_type: 'partner', round_number: roundNumber },
       { tournament_id: tournamentId, player_id: a2.id, related_player_id: a1.id, relation_type: 'partner', round_number: roundNumber },
@@ -233,6 +235,7 @@ async function insertRelationships(
       { tournament_id: tournamentId, player_id: b2.id, related_player_id: b1.id, relation_type: 'partner', round_number: roundNumber }
     );
 
+    // opponents
     for (const a of [a1, a2]) {
       for (const b of [b1, b2]) {
         rows.push(
@@ -250,6 +253,7 @@ async function insertRelationships(
 // ─── High-level operations ────────────────────────────────────────────
 
 export async function startTournament(tournamentId: string): Promise<void> {
+  // Guard against double execution
   const { data: existingRound } = await getSupabase()
     .from('rounds')
     .select('id')
@@ -267,22 +271,30 @@ export async function startTournament(tournamentId: string): Promise<void> {
 
   const players = await fetchPlayers(tournamentId);
 
+  // Generate rest: randomize for round 1
   const shuffled = shufflePlayers(players);
   const restingPlayers = shuffled.slice(0, 4);
   const activePlayers = shuffled.slice(4);
 
+  // Create round 1
   const { data: roundData, error: roundErr } = await getSupabase()
     .from('rounds')
-    .insert({ tournament_id: tournamentId, round_number: 1, status: 'pending' })
+    .insert({
+      tournament_id: tournamentId,
+      round_number: 1,
+      status: 'pending',
+    })
     .select()
     .single();
   if (roundErr) throw roundErr;
   const round = roundData as Round;
 
+  // Insert rests
   await getSupabase().from('round_rests').insert(
     restingPlayers.map((p) => ({ round_id: round.id, player_id: p.id }))
   );
 
+  // Update rest flags
   for (const p of restingPlayers) {
     await getSupabase()
       .from('players')
@@ -290,9 +302,10 @@ export async function startTournament(tournamentId: string): Promise<void> {
       .eq('id', p.id);
   }
 
-  // Round 1 has no history yet — pass empty array
-  const courts = generateFirstRoundCourts(activePlayers, []);
+  // Generate court assignments
+  const courts = generateFirstRoundCourts(activePlayers);
 
+  // Insert matches
   const matchRows = courts.map((c) => ({
     round_id: round.id,
     court_number: c.courtNumber,
@@ -306,8 +319,10 @@ export async function startTournament(tournamentId: string): Promise<void> {
   const { error: matchErr } = await getSupabase().from('matches').insert(matchRows);
   if (matchErr) throw matchErr;
 
+  // Insert relationship history
   await insertRelationships(tournamentId, courts, 1);
 
+  // Update tournament status
   await getSupabase()
     .from('tournaments')
     .update({ status: 'in_progress', current_round_number: 1 })
@@ -320,16 +335,21 @@ export async function submitRoundResults(
   roundNumber: number,
   scores: ScoreEntry[]
 ): Promise<void> {
+  // Guard: if round already completed, skip
   const { data: existingRound } = await getSupabase()
     .from('rounds')
     .select('status')
     .eq('id', roundId)
     .maybeSingle();
 
-  if (existingRound?.status === 'completed') return;
+  if (existingRound?.status === 'completed') {
+    return;
+  }
 
+  // Fetch all matches for the round
   const matches = await fetchMatchesForRound(roundId);
 
+  // Update match scores
   for (const score of scores) {
     const { error } = await getSupabase()
       .from('matches')
@@ -338,6 +358,7 @@ export async function submitRoundResults(
     if (error) throw error;
   }
 
+  // Calculate and apply player deltas
   for (const match of matches) {
     const score = scores.find((s) => s.match_id === match.id);
     if (!score) throw new Error('Missing score for match ' + match.id);
@@ -353,11 +374,13 @@ export async function submitRoundResults(
     }
   }
 
+  // Mark round complete
   await getSupabase()
     .from('rounds')
     .update({ status: 'completed' })
     .eq('id', roundId);
 
+  // Fetch tournament to get total_rounds
   const { data: tournamentData } = await getSupabase()
     .from('tournaments')
     .select('total_rounds')
@@ -365,9 +388,11 @@ export async function submitRoundResults(
     .maybeSingle();
   const totalRounds = tournamentData?.total_rounds ?? DEFAULT_TOTAL_ROUNDS;
 
+  // If not last round, generate next
   if (roundNumber < totalRounds) {
     await generateAndSaveNextRound(tournamentId, roundNumber + 1, totalRounds);
   } else {
+    // Tournament complete
     await getSupabase()
       .from('tournaments')
       .update({ status: 'completed' })
@@ -380,6 +405,7 @@ async function generateAndSaveNextRound(
   nextRoundNumber: number,
   totalRounds: number = DEFAULT_TOTAL_ROUNDS
 ): Promise<void> {
+  // Guard against duplicate rounds
   const { data: existingRound } = await getSupabase()
     .from('rounds')
     .select('id')
@@ -397,6 +423,7 @@ async function generateAndSaveNextRound(
 
   const allPlayers = await fetchPlayers(tournamentId);
 
+  // Find who has already rested
   const alreadyRestedIds = new Set(
     allPlayers.filter((p) => p.rest_count > 0).map((p) => p.id)
   );
@@ -410,14 +437,20 @@ async function generateAndSaveNextRound(
   const restingIds = new Set(restingPlayers.map((p) => p.id));
   const activePlayers = allPlayers.filter((p) => !restingIds.has(p.id));
 
+  // Create round
   const { data: roundData, error: roundErr } = await getSupabase()
     .from('rounds')
-    .insert({ tournament_id: tournamentId, round_number: nextRoundNumber, status: 'pending' })
+    .insert({
+      tournament_id: tournamentId,
+      round_number: nextRoundNumber,
+      status: 'pending',
+    })
     .select()
     .single();
   if (roundErr) throw roundErr;
   const round = roundData as Round;
 
+  // Insert rests
   await getSupabase().from('round_rests').insert(
     restingPlayers.map((p) => ({ round_id: round.id, player_id: p.id }))
   );
@@ -429,9 +462,10 @@ async function generateAndSaveNextRound(
       .eq('id', p.id);
   }
 
-  // Fetch history for repeat minimization
+  // Fetch relationship history for repeat minimization
   const history = await fetchRelationshipHistory(tournamentId);
 
+  // Dynamic round logic
   const finalRound = getFinalRound(totalRounds);
   const bonusRound = getBonusRound(totalRounds);
 
@@ -441,8 +475,7 @@ async function generateAndSaveNextRound(
   } else if (nextRoundNumber === finalRound) {
     courts = generateNextRoundCourts(activePlayers, history);
   } else {
-    // Regular rounds — pass history to minimize repeats
-    courts = generateFirstRoundCourts(activePlayers, history);
+    courts = generateFirstRoundCourts(activePlayers);
   }
 
   const matchRows = courts.map((c) => ({

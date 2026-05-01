@@ -97,34 +97,55 @@ export async function createPlayers(
   return data as Player[];
 }
 
-export async function updatePlayerStats(
-  playerId: string,
-  delta: {
-    total_points: number;
-    total_diff: number;
-    wins: number;
-    losses: number;
-    games_played: number;
-  }
+// ─── OPTIMIZED: Batch update player stats ───────────────────────────
+// Instead of N×2 serial calls (fetch + update per player),
+// we fetch all players in ONE query, then update all in parallel.
+
+async function batchUpdatePlayerStats(
+  deltas: { playerId: string; pointsDelta: number; diffDelta: number; winDelta: number; lossDelta: number }[]
 ): Promise<void> {
-  const { data: current, error: fetchErr } = await getSupabase()
+  if (deltas.length === 0) return;
+
+  const playerIds = [...new Set(deltas.map((d) => d.playerId))];
+
+  // Single fetch for all players
+  const { data: currentPlayers, error: fetchErr } = await getSupabase()
     .from('players')
-    .select('total_points,total_diff,wins,losses,games_played')
-    .eq('id', playerId)
-    .single();
+    .select('id,total_points,total_diff,wins,losses,games_played')
+    .in('id', playerIds);
   if (fetchErr) throw fetchErr;
 
-  const { error } = await getSupabase()
-    .from('players')
-    .update({
-      total_points: current.total_points + delta.total_points,
-      total_diff: current.total_diff + delta.total_diff,
-      wins: current.wins + delta.wins,
-      losses: current.losses + delta.losses,
-      games_played: current.games_played + delta.games_played,
+  const playerMap = new Map(currentPlayers!.map((p) => [p.id, p]));
+
+  // Aggregate deltas per player (in case a player appears in multiple matches)
+  const aggregated = new Map<string, { total_points: number; total_diff: number; wins: number; losses: number; games_played: number }>();
+  for (const delta of deltas) {
+    const existing = aggregated.get(delta.playerId) ?? { total_points: 0, total_diff: 0, wins: 0, losses: 0, games_played: 0 };
+    aggregated.set(delta.playerId, {
+      total_points: existing.total_points + delta.pointsDelta,
+      total_diff: existing.total_diff + delta.diffDelta,
+      wins: existing.wins + delta.winDelta,
+      losses: existing.losses + delta.lossDelta,
+      games_played: existing.games_played + 1,
+    });
+  }
+
+  // Update all players in parallel
+  await Promise.all(
+    Array.from(aggregated.entries()).map(([playerId, delta]) => {
+      const current = playerMap.get(playerId)!;
+      return getSupabase()
+        .from('players')
+        .update({
+          total_points: current.total_points + delta.total_points,
+          total_diff: current.total_diff + delta.total_diff,
+          wins: current.wins + delta.wins,
+          losses: current.losses + delta.losses,
+          games_played: current.games_played + delta.games_played,
+        })
+        .eq('id', playerId);
     })
-    .eq('id', playerId);
-  if (error) throw error;
+  );
 }
 
 // ─── Rounds ─────────────────────────────────────────────────────────
@@ -279,16 +300,18 @@ export async function startTournament(tournamentId: string): Promise<void> {
   if (roundErr) throw roundErr;
   const round = roundData as Round;
 
-  await getSupabase().from('round_rests').insert(
-    restingPlayers.map((p) => ({ round_id: round.id, player_id: p.id }))
-  );
-
-  for (const p of restingPlayers) {
-    await getSupabase()
-      .from('players')
-      .update({ rest_count: 1, rest_round_number: 1 })
-      .eq('id', p.id);
-  }
+  // OPTIMIZED: Insert rests + update resting players in parallel
+  await Promise.all([
+    getSupabase().from('round_rests').insert(
+      restingPlayers.map((p) => ({ round_id: round.id, player_id: p.id }))
+    ),
+    ...restingPlayers.map((p) =>
+      getSupabase()
+        .from('players')
+        .update({ rest_count: 1, rest_round_number: 1 })
+        .eq('id', p.id)
+    ),
+  ]);
 
   // Round 1 has no history yet — pass empty array
   const courts = generateFirstRoundCourts(activePlayers, []);
@@ -330,28 +353,34 @@ export async function submitRoundResults(
 
   const matches = await fetchMatchesForRound(roundId);
 
-  for (const score of scores) {
-    const { error } = await getSupabase()
-      .from('matches')
-      .update({ score_a: score.score_a, score_b: score.score_b })
-      .eq('id', score.match_id);
-    if (error) throw error;
-  }
+  // OPTIMIZED: Update all match scores in parallel (was serial for loop)
+  await Promise.all(
+    scores.map((score) =>
+      getSupabase()
+        .from('matches')
+        .update({ score_a: score.score_a, score_b: score.score_b })
+        .eq('id', score.match_id)
+    )
+  );
 
+  // OPTIMIZED: Collect all deltas, then batch update players
+  // (was: N×2 serial calls — fetch + update per player)
+  const allDeltas: { playerId: string; pointsDelta: number; diffDelta: number; winDelta: number; lossDelta: number }[] = [];
   for (const match of matches) {
     const score = scores.find((s) => s.match_id === match.id);
     if (!score) throw new Error('Missing score for match ' + match.id);
     const deltas = calculateMatchDeltas(match, score);
     for (const delta of deltas) {
-      await updatePlayerStats(delta.playerId, {
-        total_points: delta.pointsDelta,
-        total_diff: delta.diffDelta,
-        wins: delta.winDelta,
-        losses: delta.lossDelta,
-        games_played: 1,
+      allDeltas.push({
+        playerId: delta.playerId,
+        pointsDelta: delta.pointsDelta,
+        diffDelta: delta.diffDelta,
+        winDelta: delta.winDelta,
+        lossDelta: delta.lossDelta,
       });
     }
   }
+  await batchUpdatePlayerStats(allDeltas);
 
   await getSupabase()
     .from('rounds')
@@ -418,16 +447,18 @@ async function generateAndSaveNextRound(
   if (roundErr) throw roundErr;
   const round = roundData as Round;
 
-  await getSupabase().from('round_rests').insert(
-    restingPlayers.map((p) => ({ round_id: round.id, player_id: p.id }))
-  );
-
-  for (const p of restingPlayers) {
-    await getSupabase()
-      .from('players')
-      .update({ rest_count: p.rest_count + 1, rest_round_number: nextRoundNumber })
-      .eq('id', p.id);
-  }
+  // OPTIMIZED: Insert rests + update resting players in parallel
+  await Promise.all([
+    getSupabase().from('round_rests').insert(
+      restingPlayers.map((p) => ({ round_id: round.id, player_id: p.id }))
+    ),
+    ...restingPlayers.map((p) =>
+      getSupabase()
+        .from('players')
+        .update({ rest_count: p.rest_count + 1, rest_round_number: nextRoundNumber })
+        .eq('id', p.id)
+    ),
+  ]);
 
   // Fetch history for repeat minimization
   const history = await fetchRelationshipHistory(tournamentId);

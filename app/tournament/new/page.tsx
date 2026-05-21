@@ -22,8 +22,8 @@ export default function NewTournamentPage() {
   const [players, setPlayers] = useState<string[]>(Array(PLAYER_COUNT).fill(''));
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
 
-  // קישור לטורניר israelpadel.com
   const [israelPadelTournaments, setIsraelPadelTournaments] = useState<IsraelPadelTournament[]>([]);
   const [selectedIsraelPadelId, setSelectedIsraelPadelId] = useState<string>('');
 
@@ -44,12 +44,52 @@ export default function NewTournamentPage() {
       const { data } = await supabase
         .from('tournaments')
         .select('id, title, date')
-        .is('app_tournament_id', null)
+        .not('title', 'is', null)
         .order('date', { ascending: false });
       setIsraelPadelTournaments(data ?? []);
     }
     loadIsraelPadelTournaments();
   }, []);
+
+  async function handleIsraelPadelSelect(tournamentId: string) {
+    setSelectedIsraelPadelId(tournamentId);
+    if (!tournamentId) return;
+
+    setLoadingPlayers(true);
+    try {
+      const supabase = createClient();
+
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('title')
+        .eq('id', tournamentId)
+        .single();
+
+      if (tournament?.title && !name) {
+        setName(tournament.title);
+      }
+
+      const { data: registrations } = await supabase
+        .from('tournament_registrations')
+        .select('*, profile:profiles(first_name, last_name)')
+        .eq('tournament_id', tournamentId)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: true });
+
+      if (registrations && registrations.length > 0) {
+        const playerNames = registrations.map((r: any) =>
+          `${r.profile.first_name} ${r.profile.last_name}`.trim()
+        );
+        const filled = Array(PLAYER_COUNT).fill('');
+        playerNames.slice(0, PLAYER_COUNT).forEach((n: string, i: number) => { filled[i] = n; });
+        setPlayers(filled);
+      }
+    } catch (err) {
+      console.error('Failed to load players:', err);
+    } finally {
+      setLoadingPlayers(false);
+    }
+  }
 
   function fillDemo() {
     setName('טורניר מיקסינג פאדל');
@@ -82,7 +122,6 @@ export default function NewTournamentPage() {
       const { data: { user } } = await supabase.auth.getUser();
       const tournament = await createTournament(name.trim(), user?.id);
 
-      // קישור אוטומטי לטורניר israelpadel.com אם נבחר
       if (selectedIsraelPadelId) {
         await supabase
           .from('tournaments')
@@ -120,7 +159,6 @@ export default function NewTournamentPage() {
         <h1 className="text-2xl font-bold text-blue-900">טורניר חדש</h1>
       </div>
 
-      {/* שם הטורניר */}
       <div className="bg-white border border-blue-100 rounded-xl p-4 mb-4">
         <label className="block text-sm font-semibold text-blue-800 mb-2">שם הטורניר</label>
         <input
@@ -132,7 +170,6 @@ export default function NewTournamentPage() {
         />
       </div>
 
-      {/* קישור לטורניר israelpadel.com */}
       <div className="bg-white border border-blue-100 rounded-xl p-4 mb-4">
         <label className="block text-sm font-semibold text-blue-800 mb-2">
           קישור לטורניר ב-israelpadel.com
@@ -140,7 +177,7 @@ export default function NewTournamentPage() {
         </label>
         <select
           value={selectedIsraelPadelId}
-          onChange={(e) => setSelectedIsraelPadelId(e.target.value)}
+          onChange={(e) => handleIsraelPadelSelect(e.target.value)}
           className="w-full border border-blue-200 rounded-lg px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-400 text-right"
         >
           <option value="">— ללא קישור —</option>
@@ -150,8 +187,11 @@ export default function NewTournamentPage() {
             </option>
           ))}
         </select>
-        {selectedIsraelPadelId && (
-          <p className="text-xs text-green-600 mt-1.5">✓ התוצאות יוצגו אוטומטית בדף הטורניר</p>
+        {selectedIsraelPadelId && !loadingPlayers && (
+          <p className="text-xs text-green-600 mt-1.5">✓ שמות השחקנים המאושרים נטענו אוטומטית</p>
+        )}
+        {loadingPlayers && (
+          <p className="text-xs text-blue-500 mt-1.5">טוען שחקנים...</p>
         )}
       </div>
 
@@ -162,7 +202,6 @@ export default function NewTournamentPage() {
         מלא שחקני הדגמה
       </button>
 
-      {/* שחקנים */}
       <div className="bg-white border border-blue-100 rounded-xl p-4 mb-4">
         <p className="text-sm font-semibold text-blue-800 mb-3">שחקנים ({PLAYER_COUNT})</p>
         <div className="space-y-2">

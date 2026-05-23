@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import {
   fetchTournament, fetchPlayers, fetchCurrentRound,
-  fetchRoundWithDetails, fetchRounds, fetchMatchesForRound,
+  fetchRoundWithDetails, fetchRounds,
 } from '@/lib/tournament/db';
-import { sortByStandings, DEFAULT_TOTAL_ROUNDS, getFinalRound } from '@/lib/tournament/scheduling';
+import { sortByStandings, DEFAULT_TOTAL_ROUNDS, getFinalRound, TOTAL_ROUNDS } from '@/lib/tournament/scheduling';
 import TournamentHeader from '@/components/TournamentHeader';
 import RestingPlayersCard from '@/components/RestingPlayersCard';
 import CourtMatchCard from '@/components/CourtMatchCard';
@@ -51,23 +51,9 @@ export default async function TournamentDashboardPage({ params }: { params: { id
 
   const totalRounds = (tournament as any).total_rounds ?? DEFAULT_TOTAL_ROUNDS;
   const finalRound = getFinalRound(totalRounds);
-  const roundBeforeFinal = finalRound - 1;
+  const roundBeforeFinal = finalRound - 1; // סיבוב 4
 
-  // חשב finalPlayerIds — 4 השחקנים שהיו בסיבוב הגמר
-  const finalRoundData = allRounds.find(r => r.round_number === finalRound && r.status === 'completed');
-  let finalPlayerIds: Set<string> | undefined;
-  if (finalRoundData) {
-    const finalMatches = await fetchMatchesForRound(finalRoundData.id);
-    finalPlayerIds = new Set(
-      finalMatches.flatMap(m => [
-        m.team_a_player_1_id,
-        m.team_a_player_2_id,
-        m.team_b_player_1_id,
-        m.team_b_player_2_id,
-      ])
-    );
-  }
-
+  // הכפתור יופיע אחרי סיבוב 4 (לפני הגמר) ואחרי ההשלמה
   const showAddRoundButton = isCurrentRoundComplete &&
     (tournament.status as string) !== 'completed' &&
     (
@@ -128,7 +114,7 @@ export default async function TournamentDashboardPage({ params }: { params: { id
 
       <div>
         <h2 className="text-sm font-semibold text-blue-400 uppercase tracking-wide mb-3">דירוג נוכחי</h2>
-        <StandingsTable players={sortedPlayers} finalPlayerIds={finalPlayerIds} />
+        <StandingsTable players={sortedPlayers} />
       </div>
 
       {roundHistoryDetails.length > 0 && (

@@ -8,11 +8,12 @@ interface Props {
   sortedPlayers: Player[];
   roundDetails: RoundWithDetails | null;
   totalRounds: number;
+  finalPlayerIds?: Set<string>;
 }
 
 const REFRESH_INTERVAL = 15000;
 
-export default function DisplayClient({ tournament, sortedPlayers, roundDetails, totalRounds }: Props) {
+export default function DisplayClient({ tournament, sortedPlayers, roundDetails, totalRounds, finalPlayerIds }: Props) {
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL / 1000);
 
   useEffect(() => {
@@ -31,6 +32,35 @@ export default function DisplayClient({ tournament, sortedPlayers, roundDetails,
 
   const medals = ['🥇', '🥈', '🥉'];
   const isFinalRound = roundDetails?.round_number === totalRounds - 1;
+
+  const hasFinal = finalPlayerIds && finalPlayerIds.size > 0;
+  const finalPlayers = hasFinal
+    ? sortedPlayers.filter(p => finalPlayerIds!.has(p.id))
+    : [];
+  const restPlayers = hasFinal
+    ? sortedPlayers.filter(p => !finalPlayerIds!.has(p.id))
+    : sortedPlayers;
+
+  const renderRow = (player: Player, rank: number) => (
+    <tr key={player.id} className={`border-b border-blue-900/40 transition-colors ${
+      rank === 1 ? 'bg-yellow-500/10' : rank === 2 ? 'bg-slate-400/5' : rank === 3 ? 'bg-orange-500/5' : ''
+    }`}>
+      <td className="px-4 py-2.5 text-right">
+        {rank <= 3
+          ? <span className="text-base">{medals[rank - 1]}</span>
+          : <span className="text-blue-600 font-bold">{rank}</span>}
+      </td>
+      <td className="px-4 py-2.5 font-semibold text-white text-right">{player.name}</td>
+      <td className="px-3 py-2.5 text-center font-bold text-blue-300 text-base">{player.total_points}</td>
+      <td className={`px-3 py-2.5 text-center font-medium text-sm ${
+        player.total_diff > 0 ? 'text-green-400' :
+        player.total_diff < 0 ? 'text-red-400' : 'text-blue-600'
+      }`}>
+        {player.total_diff > 0 ? '+' : ''}{player.total_diff}
+      </td>
+      <td className="px-3 py-2.5 text-center text-slate-400 text-sm">{player.wins}</td>
+    </tr>
+  );
 
   return (
     <div className="min-h-screen bg-[#0a1628] text-white" dir="rtl">
@@ -84,21 +114,24 @@ export default function DisplayClient({ tournament, sortedPlayers, roundDetails,
                 </tr>
               </thead>
               <tbody>
-                {sortedPlayers.map((player, index) => (
-                  <tr key={player.id} className={`border-b border-blue-900/40 transition-colors ${
-                    index === 0 ? 'bg-yellow-500/10' : index === 1 ? 'bg-slate-400/5' : index === 2 ? 'bg-orange-500/5' : ''
-                  }`}>
-                    <td className="px-4 py-2.5 text-right">
-                      {index < 3 ? <span className="text-base">{medals[index]}</span> : <span className="text-blue-600 font-bold">{index + 1}</span>}
-                    </td>
-                    <td className="px-4 py-2.5 font-semibold text-white text-right">{player.name}</td>
-                    <td className="px-3 py-2.5 text-center font-bold text-blue-300 text-base">{player.total_points}</td>
-                    <td className={`px-3 py-2.5 text-center font-medium text-sm ${player.total_diff > 0 ? 'text-green-400' : player.total_diff < 0 ? 'text-red-400' : 'text-blue-600'}`}>
-                      {player.total_diff > 0 ? '+' : ''}{player.total_diff}
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-slate-400 text-sm">{player.wins}</td>
-                  </tr>
-                ))}
+                {hasFinal ? (
+                  <>
+                    <tr>
+                      <td colSpan={5} className="px-4 py-1.5 bg-yellow-500/10 text-yellow-400 text-xs font-bold border-b border-yellow-900/40">
+                        🏆 ליגת אליפות — מקומות 1–4
+                      </td>
+                    </tr>
+                    {finalPlayers.map((p, i) => renderRow(p, i + 1))}
+                    <tr>
+                      <td colSpan={5} className="px-4 py-1.5 bg-blue-900/40 text-blue-500 text-xs font-bold border-b border-blue-900/40">
+                        מקומות 5–20
+                      </td>
+                    </tr>
+                    {restPlayers.map((p, i) => renderRow(p, i + 5))}
+                  </>
+                ) : (
+                  sortedPlayers.map((player, index) => renderRow(player, index + 1))
+                )}
               </tbody>
             </table>
           </div>
@@ -144,17 +177,11 @@ export default function DisplayClient({ tournament, sortedPlayers, roundDetails,
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {/* Team A */}
                         <div className={`flex-1 text-center rounded-xl p-3 transition-all ${aWon ? 'bg-blue-600/20 border border-blue-500' : 'bg-blue-900/20 border border-blue-900'}`}>
-                          <p className={`font-bold text-base leading-tight text-center ${aWon ? 'text-white' : 'text-blue-200'}`}>
-                            {match.team_a_player_1.name}
-                          </p>
-                          <p className={`font-bold text-base leading-tight mt-1 text-center ${aWon ? 'text-white' : 'text-blue-200'}`}>
-                            {match.team_a_player_2.name}
-                          </p>
+                          <p className={`font-bold text-base leading-tight text-center ${aWon ? 'text-white' : 'text-blue-200'}`}>{match.team_a_player_1.name}</p>
+                          <p className={`font-bold text-base leading-tight mt-1 text-center ${aWon ? 'text-white' : 'text-blue-200'}`}>{match.team_a_player_2.name}</p>
                         </div>
 
-                        {/* Score */}
                         <div className="flex flex-col items-center gap-1 px-2 shrink-0">
                           {hasResult ? (
                             <>
@@ -167,14 +194,9 @@ export default function DisplayClient({ tournament, sortedPlayers, roundDetails,
                           )}
                         </div>
 
-                        {/* Team B */}
                         <div className={`flex-1 text-center rounded-xl p-3 transition-all ${bWon ? 'bg-blue-600/20 border border-blue-500' : 'bg-blue-900/20 border border-blue-900'}`}>
-                          <p className={`font-bold text-base leading-tight text-center ${bWon ? 'text-white' : 'text-blue-200'}`}>
-                            {match.team_b_player_1.name}
-                          </p>
-                          <p className={`font-bold text-base leading-tight mt-1 text-center ${bWon ? 'text-white' : 'text-blue-200'}`}>
-                            {match.team_b_player_2.name}
-                          </p>
+                          <p className={`font-bold text-base leading-tight text-center ${bWon ? 'text-white' : 'text-blue-200'}`}>{match.team_b_player_1.name}</p>
+                          <p className={`font-bold text-base leading-tight mt-1 text-center ${bWon ? 'text-white' : 'text-blue-200'}`}>{match.team_b_player_2.name}</p>
                         </div>
                       </div>
                     </div>
@@ -189,7 +211,7 @@ export default function DisplayClient({ tournament, sortedPlayers, roundDetails,
               <div className="text-center">
                 <div className="text-8xl mb-4">🏆</div>
                 <h2 className="text-4xl font-black text-white mb-2">הטורניר הסתיים!</h2>
-                <p className="text-2xl text-yellow-400 font-bold">🥇 {sortedPlayers[0]?.name}</p>
+                <p className="text-2xl text-yellow-400 font-bold">🥇 {finalPlayers[0]?.name ?? sortedPlayers[0]?.name}</p>
               </div>
             </div>
           )}

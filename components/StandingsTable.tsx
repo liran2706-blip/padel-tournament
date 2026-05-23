@@ -8,8 +8,20 @@ interface Props {
 export default function StandingsTable({ players, finalPlayerIds }: Props) {
   const hasFinal = finalPlayerIds && finalPlayerIds.size > 0;
 
-  const finalPlayers = hasFinal ? players.filter(p => finalPlayerIds!.has(p.id)) : [];
-  const restPlayers  = hasFinal ? players.filter(p => !finalPlayerIds!.has(p.id)) : players;
+  const finalPlayers = hasFinal
+    ? players.filter(p => finalPlayerIds!.has(p.id)).sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      })
+    : [];
+  const restPlayers = hasFinal
+    ? players.filter(p => !finalPlayerIds!.has(p.id)).sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      })
+    : players;
 
   const renderRow = (player: Player, rank: number) => (
     <tr key={player.id} className={`border-b border-blue-50 last:border-0 ${rank === 1 ? 'bg-blue-50' : ''}`}>
@@ -50,13 +62,13 @@ export default function StandingsTable({ players, finalPlayerIds }: Props) {
             <>
               <tr>
                 <td colSpan={6} className="px-3 py-1.5 bg-yellow-50 text-yellow-700 text-xs font-semibold border-b border-yellow-100">
-                  🏆 ליגת אליפות — סיבוב גמר
+                  🏆 ליגת אליפות — מקומות 1–4
                 </td>
               </tr>
               {finalPlayers.map((p, i) => renderRow(p, i + 1))}
               <tr>
                 <td colSpan={6} className="px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-100">
-                  שאר השחקנים
+                  מקומות 5–20
                 </td>
               </tr>
               {restPlayers.map((p, i) => renderRow(p, i + 5))}

@@ -10,8 +10,20 @@ const medals = ['🥇', '🥈', '🥉', '4️⃣'];
 export default function FinalSummaryTable({ players, finalPlayerIds }: Props) {
   const hasFinal = finalPlayerIds && finalPlayerIds.size > 0;
 
-  const finalPlayers = hasFinal ? players.filter(p => finalPlayerIds!.has(p.id)) : [];
-  const restPlayers  = hasFinal ? players.filter(p => !finalPlayerIds!.has(p.id)) : players;
+  const finalPlayers = hasFinal
+    ? players.filter(p => finalPlayerIds!.has(p.id)).sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      })
+    : [];
+  const restPlayers = hasFinal
+    ? players.filter(p => !finalPlayerIds!.has(p.id)).sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      })
+    : players;
 
   const renderRow = (player: Player, rank: number) => (
     <tr
@@ -62,13 +74,13 @@ export default function FinalSummaryTable({ players, finalPlayerIds }: Props) {
             <>
               <tr>
                 <td colSpan={7} className="px-3 py-1.5 bg-yellow-50 text-yellow-700 text-xs font-semibold border-b border-yellow-100">
-                  🏆 ליגת אליפות — סיבוב גמר
+                  🏆 ליגת אליפות — מקומות 1–4
                 </td>
               </tr>
               {finalPlayers.map((p, i) => renderRow(p, i + 1))}
               <tr>
                 <td colSpan={7} className="px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-100">
-                  שאר השחקנים
+                  מקומות 5–20
                 </td>
               </tr>
               {restPlayers.map((p, i) => renderRow(p, i + 5))}

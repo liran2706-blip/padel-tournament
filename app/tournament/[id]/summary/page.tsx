@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { fetchTournament, fetchPlayers, fetchRounds, fetchRoundWithDetails, fetchMatchesForRound } from '@/lib/tournament/db';
-import { sortByStandings, getFinalRound, DEFAULT_TOTAL_ROUNDS } from '@/lib/tournament/scheduling';
+import { getFinalRound, DEFAULT_TOTAL_ROUNDS } from '@/lib/tournament/scheduling';
 import FinalSummaryTable from '@/components/FinalSummaryTable';
 import RoundHistory from '@/components/RoundHistory';
 
@@ -19,22 +19,23 @@ export default async function TournamentSummaryPage({ params }: { params: { id: 
   const totalRounds = (tournament as any).total_rounds ?? DEFAULT_TOTAL_ROUNDS;
   const finalRound = getFinalRound(totalRounds);
 
-  // חשב finalPlayerIds — 4 השחקנים שהיו בסיבוב הגמר
+  // רק 4 השחקנים ממגרש 1 של סיבוב הגמר
   const finalRoundData = allRounds.find(r => r.round_number === finalRound && r.status === 'completed');
   let finalPlayerIds: Set<string> | undefined;
   if (finalRoundData) {
     const finalMatches = await fetchMatchesForRound(finalRoundData.id);
-    finalPlayerIds = new Set(
-      finalMatches.flatMap(m => [
-        m.team_a_player_1_id,
-        m.team_a_player_2_id,
-        m.team_b_player_1_id,
-        m.team_b_player_2_id,
-      ])
-    );
+    const court1 = finalMatches.find(m => m.court_number === 1);
+    if (court1) {
+      finalPlayerIds = new Set([
+        court1.team_a_player_1_id,
+        court1.team_a_player_2_id,
+        court1.team_b_player_1_id,
+        court1.team_b_player_2_id,
+      ]);
+    }
   }
 
-  // מיין: גמרנים לפי ניקוד בינם לבין עצמם, שאר לפי ניקוד כללי
+  // מיין: גמרנים בינם לבין עצמם, שאר לפי ניקוד כללי — שניהם נעולים במיקומים שלהם
   const finalPlayers = finalPlayerIds
     ? allPlayers.filter(p => finalPlayerIds!.has(p.id)).sort((a, b) => {
         if (b.total_points !== a.total_points) return b.total_points - a.total_points;
@@ -48,10 +49,13 @@ export default async function TournamentSummaryPage({ params }: { params: { id: 
         if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
         return b.wins - a.wins;
       })
-    : allPlayers;
+    : allPlayers.sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      });
 
-  const sortedPlayers = finalPlayerIds ? [...finalPlayers, ...restPlayers] : allPlayers;
-
+  const sortedPlayers = [...finalPlayers, ...restPlayers];
   const [first, second, third] = finalPlayers.length > 0 ? finalPlayers : sortedPlayers;
 
   return (

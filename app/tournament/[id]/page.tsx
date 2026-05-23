@@ -53,19 +53,20 @@ export default async function TournamentDashboardPage({ params }: { params: { id
   const finalRound = getFinalRound(totalRounds);
   const roundBeforeFinal = finalRound - 1;
 
-  // חשב finalPlayerIds — 4 השחקנים שהיו בסיבוב הגמר
+  // חשב finalPlayerIds — רק 4 השחקנים ממגרש 1 של סיבוב הגמר
   const finalRoundData = allRounds.find(r => r.round_number === finalRound && r.status === 'completed');
   let finalPlayerIds: Set<string> | undefined;
   if (finalRoundData) {
     const finalMatches = await fetchMatchesForRound(finalRoundData.id);
-    finalPlayerIds = new Set(
-      finalMatches.flatMap(m => [
-        m.team_a_player_1_id,
-        m.team_a_player_2_id,
-        m.team_b_player_1_id,
-        m.team_b_player_2_id,
-      ])
-    );
+    const court1 = finalMatches.find(m => m.court_number === 1);
+    if (court1) {
+      finalPlayerIds = new Set([
+        court1.team_a_player_1_id,
+        court1.team_a_player_2_id,
+        court1.team_b_player_1_id,
+        court1.team_b_player_2_id,
+      ]);
+    }
   }
 
   const showAddRoundButton = isCurrentRoundComplete &&

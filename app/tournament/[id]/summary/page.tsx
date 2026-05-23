@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { fetchTournament, fetchPlayers, fetchRounds, fetchRoundWithDetails } from '@/lib/tournament/db';
-import { sortByStandings } from '@/lib/tournament/scheduling';
+import { fetchTournament, fetchPlayers, fetchRounds, fetchRoundWithDetails, fetchMatchesForRound } from '@/lib/tournament/db';
+import { sortByStandings, getFinalRound, DEFAULT_TOTAL_ROUNDS } from '@/lib/tournament/scheduling';
 import FinalSummaryTable from '@/components/FinalSummaryTable';
 import RoundHistory from '@/components/RoundHistory';
 
@@ -13,11 +13,46 @@ export default async function TournamentSummaryPage({ params }: { params: { id: 
   if (tournament.status !== 'completed') redirect(`/tournament/${params.id}`);
 
   const allPlayers = await fetchPlayers(params.id);
-  const sortedPlayers = sortByStandings(allPlayers);
   const allRounds = await fetchRounds(params.id);
   const roundDetails = await Promise.all(allRounds.map((r) => fetchRoundWithDetails(r, allPlayers)));
 
-  const [first, second, third] = sortedPlayers;
+  const totalRounds = (tournament as any).total_rounds ?? DEFAULT_TOTAL_ROUNDS;
+  const finalRound = getFinalRound(totalRounds);
+
+  // חשב finalPlayerIds — 4 השחקנים שהיו בסיבוב הגמר
+  const finalRoundData = allRounds.find(r => r.round_number === finalRound && r.status === 'completed');
+  let finalPlayerIds: Set<string> | undefined;
+  if (finalRoundData) {
+    const finalMatches = await fetchMatchesForRound(finalRoundData.id);
+    finalPlayerIds = new Set(
+      finalMatches.flatMap(m => [
+        m.team_a_player_1_id,
+        m.team_a_player_2_id,
+        m.team_b_player_1_id,
+        m.team_b_player_2_id,
+      ])
+    );
+  }
+
+  // מיין: גמרנים לפי ניקוד בינם לבין עצמם, שאר לפי ניקוד כללי
+  const finalPlayers = finalPlayerIds
+    ? allPlayers.filter(p => finalPlayerIds!.has(p.id)).sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      })
+    : [];
+  const restPlayers = finalPlayerIds
+    ? allPlayers.filter(p => !finalPlayerIds!.has(p.id)).sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.total_diff !== a.total_diff) return b.total_diff - a.total_diff;
+        return b.wins - a.wins;
+      })
+    : allPlayers;
+
+  const sortedPlayers = finalPlayerIds ? [...finalPlayers, ...restPlayers] : allPlayers;
+
+  const [first, second, third] = finalPlayers.length > 0 ? finalPlayers : sortedPlayers;
 
   return (
     <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
@@ -69,7 +104,7 @@ export default async function TournamentSummaryPage({ params }: { params: { id: 
       {/* Final standings */}
       <div>
         <h2 className="text-sm font-semibold text-blue-400 uppercase tracking-wide mb-3">דירוג סופי</h2>
-        <FinalSummaryTable players={sortedPlayers} />
+        <FinalSummaryTable players={sortedPlayers} finalPlayerIds={finalPlayerIds} />
       </div>
 
       {/* Round history */}

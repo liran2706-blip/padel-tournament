@@ -8,18 +8,11 @@ interface Props {
 export default function StandingsTable({ players, finalPlayerIds }: Props) {
   const hasFinal = finalPlayerIds && finalPlayerIds.size > 0;
 
-  const finalPlayers = hasFinal
-    ? players.filter(p => finalPlayerIds!.has(p.id))
-    : [];
-  const restPlayers = hasFinal
-    ? players.filter(p => !finalPlayerIds!.has(p.id))
-    : players;
+  const finalPlayers = hasFinal ? players.filter(p => finalPlayerIds!.has(p.id)) : [];
+  const restPlayers  = hasFinal ? players.filter(p => !finalPlayerIds!.has(p.id)) : players;
 
   const renderRow = (player: Player, rank: number) => (
-    <tr
-      key={player.id}
-      className={`border-b border-blue-50 last:border-0 ${rank === 1 ? 'bg-blue-50' : ''}`}
-    >
+    <tr key={player.id} className={`border-b border-blue-50 last:border-0 ${rank === 1 ? 'bg-blue-50' : ''}`}>
       <td className="px-3 py-2.5 text-slate-400 font-medium">{rank}</td>
       <td className="px-3 py-2.5 font-semibold text-slate-800">
         <div className="flex items-center gap-1.5">

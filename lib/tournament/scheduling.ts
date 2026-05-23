@@ -11,6 +11,8 @@ export const TOTAL_PLAYERS = 20;
 export const PLAYERS_PER_ROUND = 16;
 export const RESTING_PER_ROUND = 4;
 
+const WIN_BONUS = 10;
+
 /**
  * Fisher-Yates shuffle
  */
@@ -145,7 +147,6 @@ function scoreCourts(
       [pairing.teamB[0].id, pairing.teamB[1].id],
       opponentCount
     );
-    // Partner repeats penalized more heavily than opponent repeats
     total += ps * 3 + os * 2;
   }
   return total;
@@ -239,7 +240,6 @@ export function generateFirstRoundCourts(
     if (score < bestScore) {
       bestScore = score;
       bestCourts = courts;
-      // If perfect score (no repeats), stop early
       if (bestScore === 0) break;
     }
   }
@@ -250,7 +250,6 @@ export function generateFirstRoundCourts(
 /**
  * Generate courts for the final round based on standings.
  * Always uses fixed pairing: rank1+rank4 vs rank2+rank3.
- * No history consideration — standings determine pairings.
  */
 export function generateNextRoundCourts(
   activePlayers: Player[],
@@ -262,7 +261,6 @@ export function generateNextRoundCourts(
   for (let i = 0; i < TOTAL_COURTS; i++) {
     const group = sorted.slice(i * 4, i * 4 + 4);
     const [p0, p1, p2, p3] = group;
-    // קבוע: #1+#4 נגד #2+#3
     courts.push({
       courtNumber: i + 1,
       teamA: [p0, p3],
@@ -287,7 +285,8 @@ export function generateBonusRoundCourt(activePlayers: Player[]): CourtAssignmen
 }
 
 /**
- * Calculate score delta for each player after a match result
+ * Calculate score delta for each player after a match result.
+ * Winner receives +10 bonus points on top of games won.
  */
 export interface PlayerScoreDelta {
   playerId: string;
@@ -312,7 +311,7 @@ export function calculateMatchDeltas(
   for (const id of teamA) {
     deltas.push({
       playerId: id,
-      pointsDelta: score_a,
+      pointsDelta: score_a + (score_a > score_b ? WIN_BONUS : 0),
       diffDelta: diff,
       winDelta: score_a > score_b ? 1 : 0,
       lossDelta: score_a < score_b ? 1 : 0,
@@ -322,7 +321,7 @@ export function calculateMatchDeltas(
   for (const id of teamB) {
     deltas.push({
       playerId: id,
-      pointsDelta: score_b,
+      pointsDelta: score_b + (score_b > score_a ? WIN_BONUS : 0),
       diffDelta: -diff,
       winDelta: score_b > score_a ? 1 : 0,
       lossDelta: score_b < score_a ? 1 : 0,
